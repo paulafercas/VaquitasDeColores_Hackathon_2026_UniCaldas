@@ -1,0 +1,1 @@
+# VaquitasDeColores_Hackathon_2026_UniCaldas
