@@ -1,6 +1,8 @@
 pandasql
 pandas
-matplotlib.pyplot
+matplotlib
 seaborn
 numpy
 streamlit
+google-genai
+python-dotenv
