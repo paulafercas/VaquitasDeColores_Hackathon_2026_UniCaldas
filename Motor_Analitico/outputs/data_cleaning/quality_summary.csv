@@ -1,0 +1,10 @@
+column,raw_nulls,cleaned_nulls,raw_min,cleaned_min,raw_p99,cleaned_p99,raw_max,cleaned_max
+recuento_paginas,0,0,1.0,1.0,9.0,9.0,74.0,74.0
+clics_sesion,0,0,0.0,0.0,35.0,35.0,347.0,347.0
+duracion_sesion_segundos,0,0,1.0,1.0,1922.8699999999953,1922.8699999999953,11863.0,3657.6980000007607
+abandono_rapido,0,0,0.0,0.0,1.0,1.0,1.0,1.0
+clicks_por_pagina,0,0,0.0,0.0,15.0,15.0,255.0,255.0
+tiempo_por_pagina,0,0,0.5,0.5,752.0,752.0,10888.0,1677.044000000169
+interaccion_total,0,0,1.0,1.0,42.0,42.0,386.0,386.0
+posible_frustracion,0,0,0.0,0.0,1.0,1.0,1.0,1.0
+standarized_engagement_score,0,0,-0.4520937391140833,-0.4520937391140833,4.396531462975695,4.396531462975695,32.56765673387641,8.798056827359941
