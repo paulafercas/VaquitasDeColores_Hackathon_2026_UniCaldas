@@ -11,10 +11,10 @@ from pandasql import sqldf
 pd.set_option('display.max_colwidth', None)
 
 #Dataframe para 1_Data_Recordings.csv
-df_1_Data_Recordings = pd.read_csv('1_Data_Recordings.csv')
+df_1_Data_Recordings = pd.read_csv(r'Motor_Analitico\1_Data_Recordings.csv')
 
 #Dataframe para 2_Data_Recordings.csv
-df_2_Data_Metrics = pd.read_csv('2_Data_Metrics.csv')
+df_2_Data_Metrics = pd.read_csv(r'Motor_Analitico\2_Data_Metrics.csv')
 
 #Ejecutamos sql
 pysqldf = lambda q: sqldf(q, globals())
@@ -61,4 +61,4 @@ LIMIT 20
 """
 
 top20 = pysqldf(paginas_top5)
-top20.to_csv("Motor_Analitico/top20_paginas.csv", index=False)
+top20.to_csv(r"Motor_Analitico\outputs\Top_20_paginas\top20_paginas.csv", index=False)
