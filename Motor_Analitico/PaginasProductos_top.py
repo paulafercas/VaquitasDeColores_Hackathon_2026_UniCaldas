@@ -45,6 +45,7 @@ FROM (
     FROM df_1_Data_Recordings
     WHERE direccion_url_entrada != 'https://cloudlabslearning.com/'
     AND direccion_url_entrada NOT LIKE '%err=SUBSCRIPTION_NOT_FOUND%'
+        AND direccion_url_salida NOT LIKE '%not-found%'
     
     UNION ALL
     
@@ -52,12 +53,12 @@ FROM (
     FROM df_1_Data_Recordings
     WHERE direccion_url_salida != 'https://cloudlabslearning.com/'
     AND direccion_url_salida NOT LIKE '%err=SUBSCRIPTION_NOT_FOUND%'
+        AND direccion_url_salida NOT LIKE '%not-found%'
 )
 GROUP BY pagina
 ORDER BY total_visitas DESC
-LIMIT 5
+LIMIT 20
 """
 
-top5 = pysqldf(paginas_top5)
-print(top5)
-
+top20 = pysqldf(paginas_top5)
+top20.to_csv("Motor_Analitico/top20_paginas.csv", index=False)
