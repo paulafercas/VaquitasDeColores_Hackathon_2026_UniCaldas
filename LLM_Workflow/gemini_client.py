@@ -35,7 +35,7 @@ class GeminiResponseClient:
             }
 
         try:
-            from google.genai import types
+            from google.generativeai import types
         except ImportError:
             return {
                 "status": "unconfigured",
