@@ -31,13 +31,30 @@ def route(question: str, bundle: AnalyticsBundle) -> dict[str, Any]:
     ]
     registration_terms = ["registro", "registrado", "registrados", "registrarse", "registration", "register", "signup", "sign up"]
     service_terms = ["servicios", "servicio", "pricing", "price", "precio", "precios", "contact", "contacto", "demo", "request-demo", "interes", "registration", "register"]
-
-    if (
+    if _is_hackathon_objective_request(normalized):
+        intent = "hackathon_objective_summary"
+        confidence = 0.95
+    elif any(phrase in normalized for phrase in ["interaccion promedio por pagina", "interaccion por pagina", "promedio por pagina"]) and any(
+        keyword in normalized for keyword in ["interaccion", "clic", "click", "scroll", "tiempo"]
+    ):
+        intent = "page_interaction_profile"
+        confidence = 0.92
+    elif (
         any(keyword in normalized for keyword in ["abandono", "rebote"])
-        and any(keyword in normalized for keyword in ["pagina", "paginas", "donde", "mayor", "top"])
+        and any(keyword in normalized for keyword in ["pagina", "paginas", "donde", "mayor", "top", "criticos", "criticas", "puntos"])
     ):
         intent = "page_abandonment_ranking"
         confidence = 0.9
+    elif any(phrase in normalized for phrase in ["paginas mas buscadas", "pagina mas buscada", "paginas mas consultadas"]):
+        intent = "page_metric_ranking"
+        confidence = 0.92
+        filters["page_metric"] = "entry_sessions"
+    elif _extract_page_metric(normalized) and any(
+        keyword in normalized for keyword in ["pagina", "paginas", "top", "ranking", "mas", "donde", "cuales son", "cuales fueron"]
+    ):
+        intent = "page_metric_ranking"
+        confidence = 0.93
+        filters["page_metric"] = _extract_page_metric(normalized)
     elif "servicio" in normalized or "servicios" in normalized:
         intent = "service_interest"
         confidence = 0.9
@@ -79,6 +96,14 @@ def route(question: str, bundle: AnalyticsBundle) -> dict[str, Any]:
     elif any(keyword in normalized for keyword in ["porcentaje", "por ciento", "%"]):
         intent = "share_of_sessions"
         confidence = 0.8
+    elif any(phrase in normalized for phrase in ["patrones basicos de conversion", "patrones basicos de intencion"]):
+        intent = "service_interest"
+        confidence = 0.9
+    elif any(keyword in normalized for keyword in ["conversion", "intencion"]) and any(
+        keyword in normalized for keyword in ["pricing", "contacto", "contact", "producto", "productos", "demo", "registro", "register", "servicio", "servicios"]
+    ):
+        intent = "service_interest"
+        confidence = 0.9
     elif any(
         keyword in normalized
         for keyword in [
@@ -107,6 +132,11 @@ def _extract_filters(question: str, bundle: AnalyticsBundle) -> dict[str, Any]:
     filters: dict[str, Any] = {}
     sessions = bundle.canonical_sessions
     max_date = sessions["timestamp"].dt.date.max()
+    top_n = _extract_top_n(question)
+    if top_n is not None:
+        filters["top_n"] = top_n
+    if any(phrase in question for phrase in ["menos visitas", "menos visitadas", "menos vistas", "menor trafico", "menos sesiones"]):
+        filters["sort_order"] = "asc"
 
     if "hoy" in question:
         filters["date_from"] = max_date
@@ -170,3 +200,59 @@ def _contains_value(question: str, candidate: str) -> bool:
         return False
     pattern = rf"(?<!\w){re.escape(normalized_candidate)}(?!\w)"
     return re.search(pattern, question) is not None
+
+
+def _extract_top_n(question: str) -> int | None:
+    patterns = [
+        r"\btop\s+(\d{1,2})\b",
+        r"\b(\d{1,2})\s+paginas\b",
+        r"\bprimer[oa]s?\s+(\d{1,2})\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, question)
+        if match:
+            value = int(match.group(1))
+            if 1 <= value <= 50:
+                return value
+    return None
+
+
+def _extract_page_metric(question: str) -> str | None:
+    metric_aliases = [
+        ("exit_sessions", ["sesiones de salida", "paginas de salida", "salidas", "salida", "exits"]),
+        ("entry_sessions", ["sesiones de entrada", "visitadas", "visitas", "mas vistas", "mas visitadas", "mas buscadas", "mas consultadas", "trafico", "sesiones"]),
+        ("avg_duration_seconds", ["tiempo", "duracion", "duracion promedio", "mas tiempo"]),
+        ("avg_clicks", ["clics", "clicks", "mas clics", "mas clicks"]),
+        ("avg_pages", ["paginas por sesion", "profundidad", "mas paginas"]),
+        ("avg_scroll_depth", ["scroll", "profundidad de scroll"]),
+        ("bounce_proxy_rate", ["rebote"]),
+        ("abandono_rapido_rate", ["abandono rapido"]),
+        ("frustration_rate", ["frustracion"]),
+        ("engagement_score_avg", ["engagement", "interaccion", "score"]),
+        ("registration_rate", ["registros", "registro"]),
+        ("payment_rate", ["pagos", "pago"]),
+    ]
+    for metric, aliases in metric_aliases:
+        if any(alias in question for alias in aliases):
+            return metric
+    return None
+
+
+def _is_hackathon_objective_request(question: str) -> bool:
+    meta_terms = [
+        "objetivo especifico",
+        "solucion end-to-end",
+        "end-to-end",
+        "insights adicionales",
+        "equipo de marketing",
+    ]
+    scope_terms = [
+        "paginas y productos top",
+        "puntos criticos de abandono",
+        "flujo de navegacion comun",
+        "interaccion promedio por pagina",
+        "patrones basicos de conversion",
+    ]
+    if any(term in question for term in meta_terms):
+        return True
+    return sum(term in question for term in scope_terms) >= 2

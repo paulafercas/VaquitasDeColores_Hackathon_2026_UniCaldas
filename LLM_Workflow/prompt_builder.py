@@ -13,7 +13,7 @@ def build_messages(question: str, analytics_result: dict[str, Any]) -> list[dict
     user_prompt = (
         f"Pregunta del usuario:\n{question}\n\n"
         "Resultado analitico estructurado:\n"
-        f"{json.dumps(_json_safe(analytics_result), ensure_ascii=False, indent=2)}\n\n"
+        f"{json.dumps(_compact_analytics_result(analytics_result), ensure_ascii=False, separators=(',', ':'))}\n\n"
         "Devuelve una respuesta breve con dos partes: 1) respuesta principal, 2) interpretacion de negocio."
     )
     return [
@@ -32,9 +32,8 @@ def build_general_chat_messages(
         "No inventes hechos sobre datos que no te fueron dados."
     )
     user_prompt = (
-        f"Pregunta del usuario:\n{question}\n\n"
-        "Contexto del copiloto:\n"
-        f"{json.dumps(_json_safe(app_context), ensure_ascii=False, indent=2)}\n\n"
+        f"Pregunta: {question}\n"
+        f"Contexto breve: {_compact_app_context(app_context)}\n"
         "Responde de forma natural y practica."
     )
     return [
@@ -59,3 +58,29 @@ def _json_safe(value: Any) -> Any:
     if hasattr(value, "item"):
         return value.item()
     return value
+
+
+def _compact_analytics_result(analytics_result: dict[str, Any]) -> dict[str, Any]:
+    safe = _json_safe(analytics_result)
+    return {
+        "status": safe.get("status"),
+        "metric_name": safe.get("metric_name"),
+        "filters": safe.get("filters"),
+        "values": safe.get("values"),
+        "answer": safe.get("answer"),
+        "business_interpretation": safe.get("business_interpretation"),
+        "table_preview": safe.get("table_preview", [])[:5],
+        "confidence": safe.get("confidence"),
+    }
+
+
+def _compact_app_context(app_context: dict[str, Any]) -> str:
+    capabilities = ", ".join(app_context.get("available_capabilities", []))
+    dataset = app_context.get("dataset_summary", {})
+    return (
+        f"{app_context.get('product_name', 'Copiloto')}. "
+        f"Soporta: {capabilities}. "
+        f"Dataset: {dataset.get('total_sessions', 'N/A')} sesiones entre "
+        f"{dataset.get('min_date', 'N/A')} y {dataset.get('max_date', 'N/A')}. "
+        f"{app_context.get('token_policy', '')}"
+    ).strip()

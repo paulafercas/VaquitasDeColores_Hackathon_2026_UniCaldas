@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 import pandas as pd
 
@@ -78,6 +80,57 @@ def map_to_canonical_sessions(df: pd.DataFrame) -> tuple[pd.DataFrame, SchemaMet
     )
 
 
+def _normalize_url_like(value: object, *, default: str = "Unknown") -> str:
+    if value is None or pd.isna(value):
+        return default
+    text = str(value).strip()
+    if not text:
+        return default
+    if text in {"Unknown", "Direct/Unknown", "External"}:
+        return text
+
+    parsed = urlsplit(text)
+    if not parsed.scheme or not parsed.netloc:
+        return text
+
+    path = unquote(parsed.path or "/")
+    if path != "/":
+        path = path.rstrip("/")
+        if not path:
+            path = "/"
+    path = _normalize_marketing_path(path)
+
+    normalized = urlunsplit(
+        (
+            parsed.scheme.lower(),
+            parsed.netloc.lower(),
+            path,
+            "",
+            "",
+        )
+    )
+    return normalized or default
+
+
+def _normalize_marketing_path(path: str) -> str:
+    normalized_path = path or "/"
+    if normalized_path.startswith("/register/"):
+        return "/register"
+    if normalized_path.startswith("/auth/session/"):
+        return "/auth/session"
+    if normalized_path.startswith("/verify/"):
+        return "/verify"
+    replacements = [
+        (r"^/auth/session$", "/auth/session"),
+        (r"^/register$", "/register"),
+        (r"^/verify$", "/verify"),
+    ]
+    for pattern, replacement in replacements:
+        if re.match(pattern, normalized_path):
+            return replacement
+    return normalized_path
+
+
 def _map_session_summary(df: pd.DataFrame) -> tuple[pd.DataFrame, SchemaMetadata]:
     mapped_columns: dict[str, str] = {}
     canonical = pd.DataFrame(index=df.index)
@@ -103,13 +156,13 @@ def _map_session_summary(df: pd.DataFrame) -> tuple[pd.DataFrame, SchemaMetadata
     ).astype(str)
     canonical["entry_page"] = canonical.get(
         "entry_page", pd.Series("Unknown", index=df.index)
-    ).fillna("Unknown")
+    ).fillna("Unknown").map(_normalize_url_like)
     canonical["exit_page"] = canonical.get("exit_page", canonical["entry_page"]).fillna(
         canonical["entry_page"]
-    )
+    ).map(_normalize_url_like)
     canonical["source"] = canonical.get(
         "source", pd.Series("Direct/Unknown", index=df.index)
-    ).fillna("Direct/Unknown")
+    ).fillna("Direct/Unknown").map(lambda value: _normalize_url_like(value, default="Direct/Unknown"))
     canonical["country"] = canonical.get(
         "country", pd.Series("Unknown", index=df.index)
     ).fillna("Unknown")
@@ -169,7 +222,7 @@ def _map_session_summary(df: pd.DataFrame) -> tuple[pd.DataFrame, SchemaMetadata
     )
     canonical["product"] = canonical.get("product", canonical["entry_page"]).fillna(
         canonical["entry_page"]
-    )
+    ).map(_normalize_url_like)
     canonical["page_or_product"] = canonical["product"].where(
         canonical["product"].astype(str).str.strip().ne(""),
         canonical["entry_page"],
@@ -259,6 +312,10 @@ def _map_event_log(df: pd.DataFrame) -> tuple[pd.DataFrame, SchemaMetadata]:
     canonical["frustration_flag"] = 0
     canonical["engagement_score"] = 0
     canonical["page_or_product"] = canonical["product"].fillna(canonical["entry_page"])
+    canonical["entry_page"] = canonical["entry_page"].map(_normalize_url_like)
+    canonical["exit_page"] = canonical["exit_page"].map(_normalize_url_like)
+    canonical["product"] = canonical["product"].map(_normalize_url_like)
+    canonical["page_or_product"] = canonical["page_or_product"].map(_normalize_url_like)
     canonical["flow_path"] = (
         canonical["source"].astype(str)
         + " -> "

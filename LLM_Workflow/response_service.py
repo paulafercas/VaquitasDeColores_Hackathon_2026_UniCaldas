@@ -55,14 +55,25 @@ class ResponseService:
                 question=question,
                 routed_intent=route_result,
             )
-            llm_output = self.llm_client.generate_text(
-                build_messages(question, structured_result)
-            )
-            final_answer = (
-                llm_output["text"].strip()
-                if llm_output["status"] == "ok"
-                else _fallback_text(structured_result)
-            )
+            if self.query_service.settings.llm_analytics_enabled:
+                llm_output = self.llm_client.generate_text(
+                    build_messages(question, structured_result)
+                )
+                final_answer = (
+                    llm_output["text"].strip()
+                    if llm_output["status"] == "ok"
+                    else _fallback_text(structured_result)
+                )
+            else:
+                llm_output = {
+                    "status": "skipped_analytics",
+                    "text": "",
+                    "model": None,
+                    "error_type": None,
+                    "error_message": "Las respuestas analiticas se generan localmente para minimizar consumo de tokens.",
+                    "retry_delay_seconds": None,
+                }
+                final_answer = _fallback_text(structured_result)
 
         return {
             "question": question,
@@ -74,7 +85,7 @@ class ResponseService:
             "llm_error_type": llm_output.get("error_type"),
             "llm_error_message": llm_output.get("error_message"),
             "llm_retry_delay_seconds": llm_output.get("retry_delay_seconds"),
-            "used_fallback": llm_output["status"] != "ok",
+            "used_fallback": llm_output["status"] not in {"ok", "skipped_analytics"},
             "chat_mode": "general" if general_chat_mode else "analytics",
         }
 
@@ -114,8 +125,8 @@ def _build_app_context(query_service: QueryService) -> dict[str, Any]:
             "max_date": str(sessions["timestamp"].dt.date.max()),
         },
         "token_policy": (
-            "No se envia la base completa al modelo. "
-            "Solo se envia contexto pequeño y resultados estructurados resumidos."
+            "Las preguntas analiticas se resuelven localmente por defecto. "
+            "Cuando se usa LLM, solo se envia contexto corto y un resumen estructurado."
         ),
     }
 

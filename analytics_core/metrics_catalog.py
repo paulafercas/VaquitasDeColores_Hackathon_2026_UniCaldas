@@ -57,6 +57,21 @@ SUPPORTED_METRICS = [
         "label": "Interes por servicios",
         "description": "Estima usuarios o sesiones que visitaron URLs como pricing, contact o request-demo.",
     },
+    {
+        "intent": "page_metric_ranking",
+        "label": "Ranking de paginas por metrica",
+        "description": "Rankea paginas por visitas, tiempo, clics, scroll, engagement, salidas u otras metricas disponibles.",
+    },
+    {
+        "intent": "page_interaction_profile",
+        "label": "Interaccion promedio por pagina",
+        "description": "Compara por pagina metricas promedio de interaccion como clics, scroll y tiempo.",
+    },
+    {
+        "intent": "hackathon_objective_summary",
+        "label": "Cobertura del objetivo del hackathon",
+        "description": "Resume los insights requeridos del objetivo especifico y propone insights adicionales para Marketing.",
+    },
 ]
 
 
