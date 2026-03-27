@@ -1,0 +1,4 @@
+column,rule,affected_rows,min_original,max_original
+duracion_sesion_segundos,cap_above_3657.70,68,3680.0,11863.0
+tiempo_por_pagina,cap_above_1677.04,68,1682.0,10888.0
+standarized_engagement_score,cap_above_8.7981,68,8.80542454649887,32.56765673387641

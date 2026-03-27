@@ -1,0 +1,5 @@
+check_name,passed,details
+session_count_matches_source_to_entry,1,67414 grouped vs 67414 sessions
+session_count_matches_entry_to_exit,1,67414 grouped vs 67414 sessions
+same_page_session_binary,1,All same_page_session values are binary.
+timestamp_not_null,1,67414 non-null timestamps
