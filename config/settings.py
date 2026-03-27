@@ -3,12 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-
-from dotenv import load_dotenv
-
-
-load_dotenv()
-
+import streamlit as st
 
 @dataclass(frozen=True)
 class Settings:
@@ -53,8 +48,8 @@ def get_settings() -> Settings:
         / "outputs"
         / "flujo_navegacion"
         / "entry_to_exit_transitions.csv",
-        gemini_api_key=os.getenv("GEMINI_API_KEY"),
-        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        gemini_api_key=st.secrets["GEMINI_API_KEY"],
+        gemini_model= st.secrets["GEMINI_MODEL"],
         gemini_temperature=float(os.getenv("GEMINI_TEMPERATURE", "0.2")),
         max_table_rows=int(os.getenv("MAX_TABLE_ROWS", "8")),
     )
