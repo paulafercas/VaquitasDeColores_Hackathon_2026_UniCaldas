@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from config.settings import Settings, get_settings
@@ -55,12 +56,24 @@ class GeminiResponseClient:
                 ),
             )
         except Exception as exc:
+            error_message = str(exc)
+            error_type = type(exc).__name__
+            if _is_quota_exhausted(error_message):
+                return {
+                    "status": "quota_exhausted",
+                    "text": "",
+                    "model": self.settings.gemini_model,
+                    "error_type": error_type,
+                    "error_message": error_message,
+                    "retry_delay_seconds": _extract_retry_delay_seconds(error_message),
+                }
             return {
                 "status": "unavailable",
                 "text": "",
                 "model": self.settings.gemini_model,
-                "error_type": type(exc).__name__,
-                "error_message": str(exc),
+                "error_type": error_type,
+                "error_message": error_message,
+                "retry_delay_seconds": None,
             }
 
         text = getattr(response, "text", "") or ""
@@ -70,6 +83,7 @@ class GeminiResponseClient:
             "model": self.settings.gemini_model,
             "error_type": None,
             "error_message": None,
+            "retry_delay_seconds": None,
         }
 
 
@@ -80,3 +94,22 @@ def _messages_to_prompt(messages: list[dict[str, str]]) -> str:
         content = message.get("content", "")
         blocks.append(f"{role}:\n{content}")
     return "\n\n".join(blocks)
+
+
+def _is_quota_exhausted(error_message: str) -> bool:
+    normalized = error_message.lower()
+    return (
+        "resource_exhausted" in normalized
+        or "quota exceeded" in normalized
+        or "429" in normalized and "quota" in normalized
+    )
+
+
+def _extract_retry_delay_seconds(error_message: str) -> int | None:
+    match = re.search(r"retry in\s+([0-9]+(?:\.[0-9]+)?)s", error_message, flags=re.IGNORECASE)
+    if match:
+        return int(float(match.group(1)))
+    match = re.search(r"'retrydelay':\s*'([0-9]+)s'", error_message, flags=re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    return None

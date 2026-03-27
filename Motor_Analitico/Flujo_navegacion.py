@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from typing import Iterable
-from urllib.parse import parse_qsl, urlparse
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -14,7 +13,6 @@ BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_INPUT = BASE_DIR / "1_Data_Recordings.csv"
 DEFAULT_OUTPUT_DIR = BASE_DIR / "outputs" / "flujo_navegacion"
 DIRECT_UNKNOWN = "Direct/Unknown"
-EXTERNAL_SOURCE = "External"
 
 REQUIRED_COLUMNS = {
     "fecha",
@@ -43,11 +41,6 @@ NUMERIC_COLUMNS = [
     "posible_frustracion",
 ]
 
-PATH_QUERY_ALLOWLIST = {
-    "/request-demo": {"err"},
-}
-
-
 def load_data(input_path: Path) -> pd.DataFrame:
     """Load the source dataset and validate the expected schema."""
     df = pd.read_csv(input_path)
@@ -75,57 +68,21 @@ def load_data(input_path: Path) -> pd.DataFrame:
     return df
 
 
-def normalize_url(url: object, is_referrer: bool = False) -> str:
-    """Normalize URLs so noisy auth states and fragments collapse into the same page node."""
-    if pd.isna(url):
-        return DIRECT_UNKNOWN if is_referrer else "Unknown"
-
-    raw_url = str(url).strip()
-    if not raw_url:
-        return DIRECT_UNKNOWN if is_referrer else "Unknown"
-
-    parsed = urlparse(raw_url)
-
-    if not parsed.scheme and not parsed.netloc:
-        return raw_url
-
-    path = parsed.path or "/"
-    if path != "/" and path.endswith("/"):
-        path = path.rstrip("/")
-
-    allowed_params = PATH_QUERY_ALLOWLIST.get(path, set())
-    kept_params = []
-    for key, value in parse_qsl(parsed.query, keep_blank_values=True):
-        if key in allowed_params and value:
-            kept_params.append(f"{key}={value}")
-
-    query_suffix = f"?{'&'.join(kept_params)}" if kept_params else ""
-    normalized = f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{path}{query_suffix}"
-
-    if is_referrer:
-        if "cloudlabslearning.com" not in parsed.netloc.lower():
-            return EXTERNAL_SOURCE
-
-    return normalized
-
-
 def build_session_nodes(df: pd.DataFrame) -> pd.DataFrame:
-    """Add normalized source, entry, exit, and flow helper columns."""
+    """Add source, entry, exit, and flow helper columns without URL normalization."""
     enriched = df.copy()
-    enriched["ref_source_normalized"] = enriched["referente"].apply(
-        lambda value: normalize_url(value, is_referrer=True)
+    enriched["ref_source"] = (
+        enriched["referente"].fillna("").astype(str).str.strip().replace("", DIRECT_UNKNOWN)
     )
-    enriched["url_entrada_normalized"] = enriched["direccion_url_entrada"].apply(normalize_url)
-    enriched["url_salida_normalized"] = enriched["direccion_url_salida"].apply(normalize_url)
-    enriched["same_page_session"] = (
-        enriched["url_entrada_normalized"] == enriched["url_salida_normalized"]
-    ).astype(int)
+    enriched["url_entrada"] = enriched["direccion_url_entrada"].fillna("").astype(str).str.strip()
+    enriched["url_salida"] = enriched["direccion_url_salida"].fillna("").astype(str).str.strip()
+    enriched["same_page_session"] = (enriched["url_entrada"] == enriched["url_salida"]).astype(int)
     enriched["flow_path"] = (
-        enriched["ref_source_normalized"]
+        enriched["ref_source"]
         + " -> "
-        + enriched["url_entrada_normalized"]
+        + enriched["url_entrada"]
         + " -> "
-        + enriched["url_salida_normalized"]
+        + enriched["url_salida"]
     )
     return enriched
 
@@ -149,7 +106,7 @@ def compute_transitions(
 def compute_combined_paths(df: pd.DataFrame) -> pd.DataFrame:
     path_metrics = (
         df.groupby(
-            ["ref_source_normalized", "url_entrada_normalized", "url_salida_normalized"],
+            ["ref_source", "url_entrada", "url_salida"],
             dropna=False,
         )
         .agg(
@@ -167,18 +124,18 @@ def compute_combined_paths(df: pd.DataFrame) -> pd.DataFrame:
         .reset_index(drop=True)
     )
     path_metrics["flow_path"] = (
-        path_metrics["ref_source_normalized"]
+        path_metrics["ref_source"]
         + " -> "
-        + path_metrics["url_entrada_normalized"]
+        + path_metrics["url_entrada"]
         + " -> "
-        + path_metrics["url_salida_normalized"]
+        + path_metrics["url_salida"]
     )
     return path_metrics
 
 
 def compute_page_metrics(df: pd.DataFrame) -> pd.DataFrame:
     entry_metrics = (
-        df.groupby("url_entrada_normalized", dropna=False)
+        df.groupby("url_entrada", dropna=False)
         .agg(
             entry_sessions=("id_usuario_clarity", "size"),
             avg_duration_seconds=("duracion_sesion_segundos", "mean"),
@@ -190,14 +147,14 @@ def compute_page_metrics(df: pd.DataFrame) -> pd.DataFrame:
             engagement_score_avg=("standarized_engagement_score", "mean"),
         )
         .reset_index()
-        .rename(columns={"url_entrada_normalized": "page"})
+        .rename(columns={"url_entrada": "page"})
     )
 
     exit_counts = (
-        df.groupby("url_salida_normalized", dropna=False)
+        df.groupby("url_salida", dropna=False)
         .size()
         .reset_index(name="exit_sessions")
-        .rename(columns={"url_salida_normalized": "page"})
+        .rename(columns={"url_salida": "page"})
     )
 
     page_metrics = (
@@ -248,7 +205,7 @@ def compute_segment_summary(df: pd.DataFrame, segment_column: str) -> pd.DataFra
 
 def compute_segment_transitions(df: pd.DataFrame, segment_column: str) -> pd.DataFrame:
     summary = (
-        df.groupby([segment_column, "url_entrada_normalized", "url_salida_normalized"], dropna=False)
+        df.groupby([segment_column, "url_entrada", "url_salida"], dropna=False)
         .size()
         .reset_index(name="sessions")
         .sort_values([segment_column, "sessions"], ascending=[True, False])
@@ -264,15 +221,15 @@ def build_sankey_edges(
         [
             source_to_entry.rename(
                 columns={
-                    "ref_source_normalized": "source",
-                    "url_entrada_normalized": "target",
+                    "ref_source": "source",
+                    "url_entrada": "target",
                     "sessions": "value",
                 }
             )[["source", "target", "value"]],
             entry_to_exit.rename(
                 columns={
-                    "url_entrada_normalized": "source",
-                    "url_salida_normalized": "target",
+                    "url_entrada": "source",
+                    "url_salida": "target",
                     "sessions": "value",
                 }
             )[["source", "target", "value"]],
@@ -385,28 +342,6 @@ def validate_outputs(
     ]
     return pd.DataFrame(validations)
 
-
-def build_url_normalization_sample(
-    sessions: pd.DataFrame, sample_size: int = 10
-) -> pd.DataFrame:
-    sample = (
-        sessions[
-            [
-                "direccion_url_entrada",
-                "url_entrada_normalized",
-                "direccion_url_salida",
-                "url_salida_normalized",
-                "referente",
-                "ref_source_normalized",
-            ]
-        ]
-        .drop_duplicates()
-        .head(sample_size)
-        .reset_index(drop=True)
-    )
-    return sample
-
-
 def export_outputs(output_dir: Path, artifacts: dict[str, pd.DataFrame]) -> list[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     exported_files: list[Path] = []
@@ -435,14 +370,14 @@ def print_summary(
     print("\nTop source -> entry transitions:")
     print(
         select_top_rows(source_to_entry, "sessions", 10)[
-            ["ref_source_normalized", "url_entrada_normalized", "sessions"]
+            ["ref_source", "url_entrada", "sessions"]
         ].to_string(index=False)
     )
 
     print("\nTop entry -> exit transitions:")
     print(
         select_top_rows(entry_to_exit, "sessions", 10)[
-            ["url_entrada_normalized", "url_salida_normalized", "sessions"]
+            ["url_entrada", "url_salida", "sessions"]
         ].to_string(index=False)
     )
 
@@ -454,12 +389,8 @@ def run_workflow(input_path: Path, output_dir: Path, generate_charts: bool) -> d
     raw_df = load_data(input_path)
     sessions = build_session_nodes(raw_df)
 
-    source_to_entry = compute_transitions(
-        sessions, "ref_source_normalized", "url_entrada_normalized"
-    )
-    entry_to_exit = compute_transitions(
-        sessions, "url_entrada_normalized", "url_salida_normalized"
-    )
+    source_to_entry = compute_transitions(sessions, "ref_source", "url_entrada")
+    entry_to_exit = compute_transitions(sessions, "url_entrada", "url_salida")
     combined_paths = compute_combined_paths(sessions)
     page_metrics = compute_page_metrics(sessions)
     sankey_edges = build_sankey_edges(source_to_entry, entry_to_exit)
@@ -469,14 +400,9 @@ def run_workflow(input_path: Path, output_dir: Path, generate_charts: bool) -> d
     segment_transition_pais = compute_segment_transitions(sessions, "pais")
     segment_transition_dispositivo = compute_segment_transitions(sessions, "dispositivo")
     validations = validate_outputs(sessions, source_to_entry, entry_to_exit)
-    normalization_sample = build_url_normalization_sample(sessions)
 
-    source_entry_matrix = build_transition_matrix(
-        source_to_entry, "ref_source_normalized", "url_entrada_normalized"
-    )
-    entry_exit_matrix = build_transition_matrix(
-        entry_to_exit, "url_entrada_normalized", "url_salida_normalized"
-    )
+    source_entry_matrix = build_transition_matrix(source_to_entry, "ref_source", "url_entrada")
+    entry_exit_matrix = build_transition_matrix(entry_to_exit, "url_entrada", "url_salida")
 
     artifacts = {
         "cleaned_sessions.csv": sessions,
@@ -493,7 +419,6 @@ def run_workflow(input_path: Path, output_dir: Path, generate_charts: bool) -> d
         "transition_matrix_source_entry.csv": source_entry_matrix,
         "transition_matrix_entry_exit.csv": entry_exit_matrix,
         "validation_checks.csv": validations,
-        "url_normalization_sample.csv": normalization_sample,
     }
     exported_files = export_outputs(output_dir, artifacts)
 

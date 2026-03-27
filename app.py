@@ -34,8 +34,9 @@ def main() -> None:
 
     st.title("Copiloto Conversacional de Analitica Web")
     st.write(
-        "Haz preguntas sobre navegacion, paginas mas vistas, salidas, abandono o segmentos. "
-        "El motor calcula la metrica y Gemini redacta la respuesta final."
+        "Puedes hacer preguntas analiticas sobre navegacion, paginas mas vistas, salidas, abandono o segmentos, "
+        "pero tambien preguntas naturales como que es este copiloto o como se usa. "
+        "El motor calcula metricas cuando hace falta y Gemini responde de forma conversacional."
     )
 
     if "messages" not in st.session_state:
@@ -44,7 +45,8 @@ def main() -> None:
                 "role": "assistant",
                 "content": (
                     "Estoy listo para ayudarte a analizar el comportamiento web. "
-                    "Puedes preguntarme, por ejemplo, cual fue la pagina mas vista hoy o cual fue el flujo principal."
+                    "Puedes preguntarme, por ejemplo, cual fue la pagina mas vista hoy, cual fue el flujo principal, "
+                    "que es este copiloto o como usarlo."
                 ),
                 "support_table": None,
             }
@@ -71,6 +73,7 @@ def main() -> None:
             "llm_status": result["llm_status"],
             "llm_error_type": result.get("llm_error_type"),
             "llm_error_message": result.get("llm_error_message"),
+            "llm_retry_delay_seconds": result.get("llm_retry_delay_seconds"),
             "used_fallback": result.get("used_fallback", False),
         }
         st.session_state.last_llm_runtime = {
@@ -78,6 +81,7 @@ def main() -> None:
             "model": result["model"],
             "llm_error_type": result.get("llm_error_type"),
             "llm_error_message": result.get("llm_error_message"),
+            "llm_retry_delay_seconds": result.get("llm_retry_delay_seconds"),
             "used_fallback": result.get("used_fallback", False),
         }
         st.session_state.messages.append(assistant_message)

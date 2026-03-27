@@ -22,6 +22,27 @@ def build_messages(question: str, analytics_result: dict[str, Any]) -> list[dict
     ]
 
 
+def build_general_chat_messages(
+    question: str,
+    app_context: dict[str, Any],
+) -> list[dict[str, str]]:
+    system_prompt = (
+        "Eres un copiloto conversacional de analitica web. Responde en espanol, de forma natural, util y cercana. "
+        "Puedes explicar que hace el copiloto, como usarlo, que preguntas soporta y como interpretar resultados. "
+        "No inventes hechos sobre datos que no te fueron dados."
+    )
+    user_prompt = (
+        f"Pregunta del usuario:\n{question}\n\n"
+        "Contexto del copiloto:\n"
+        f"{json.dumps(_json_safe(app_context), ensure_ascii=False, indent=2)}\n\n"
+        "Responde de forma natural y practica."
+    )
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+
 def _json_safe(value: Any) -> Any:
     if isinstance(value, dict):
         return {

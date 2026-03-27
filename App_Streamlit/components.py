@@ -22,6 +22,16 @@ def render_sidebar(
             st.write(f"- Estado: {llm_runtime.get('llm_status', 'unknown')}")
             st.write(f"- Modelo: {llm_runtime.get('model') or 'N/A'}")
             st.write(f"- Fallback local: {'Si' if llm_runtime.get('used_fallback') else 'No'}")
+            if llm_runtime.get("llm_status") == "quota_exhausted":
+                retry_delay = llm_runtime.get("llm_retry_delay_seconds")
+                retry_text = (
+                    f" Reintenta en aproximadamente {retry_delay} segundos."
+                    if retry_delay is not None
+                    else ""
+                )
+                st.error(
+                    "Gemini agotó la cuota disponible para este proyecto." + retry_text
+                )
             if llm_runtime.get("llm_error_type") or llm_runtime.get("llm_error_message"):
                 st.warning(
                     f"{llm_runtime.get('llm_error_type') or 'LLMError'}: "
@@ -46,7 +56,15 @@ def render_chat_message(message: dict[str, Any]) -> None:
     role = message["role"]
     with st.chat_message(role):
         st.markdown(message["content"])
-        if role == "assistant" and message.get("used_fallback"):
+        if role == "assistant" and message.get("llm_status") == "quota_exhausted":
+            retry_delay = message.get("llm_retry_delay_seconds")
+            retry_text = (
+                f" Gemini reportó cuota agotada. Reintenta en aproximadamente {retry_delay} segundos."
+                if retry_delay is not None
+                else " Gemini reportó cuota agotada para este proyecto."
+            )
+            st.error(retry_text)
+        elif role == "assistant" and message.get("used_fallback"):
             st.info(
                 "Respuesta generada con fallback local del motor analitico porque Gemini no respondio correctamente."
             )
@@ -63,6 +81,7 @@ def render_chat_message(message: dict[str, Any]) -> None:
                         "llm_status": message.get("llm_status"),
                         "llm_error_type": message.get("llm_error_type"),
                         "llm_error_message": message.get("llm_error_message"),
+                        "llm_retry_delay_seconds": message.get("llm_retry_delay_seconds"),
                     }
                 )
                 support_table = message["support_table"]
